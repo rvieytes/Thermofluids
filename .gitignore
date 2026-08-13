@@ -1,0 +1,15 @@
+# Octave/Matlab
+*.asv
+*.m~
+.Octave_hist
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Local project files
+.sandbox
