@@ -44,11 +44,20 @@ fase = None# 'vap' #, 'liq'
 # ------------------------------
 # 4. INICIALIZACIÓN FÍSICA
 # ------------------------------
-water = Fluid(fluid_name, phase=fase,temperature=temperatura, pressure=presion)
+f = Fluid(fluid_name, phase=fase,temperature=temperatura, pressure=presion)
 
 # ------------------------------
 # 5. CÁLCULO DEL PROBLEMA
 # ------------------------------
 
-print(water.rho)
-
+print(f"rho        = {f.rho:.3f} kg/m³")       # density
+print(f"mu         = {f.mu:.3e} Pa·s")         # dynamic viscosity
+print(f"nu         = {f.nu:.3e} m²/s")         # kinematic viscosity
+print(f"cp         = {f.cp:.3f} J/(kg·K)")    # specific heat capacity
+print(f"k          = {f.k:.3f} W/(m·K)")      # thermal conductivity
+print(f"Pr         = {f.Pr:.3f}")              # Prandtl number
+print(f"h          = {f.h:.3f} J/kg")         # specific enthalpy
+print(f"u          = {f.u:.3f} J/kg")          # specific internal energy
+print(f"s          = {f.s:.3f} J/(kg·K)")     # specific entropy
+print(f"c          = {f.sound_speed:.3f} m/s") # sound speed
+print(f"beta       = {f.beta:.3e} 1/K")        # isobaric expansion coefficient
