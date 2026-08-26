@@ -1,0 +1,145 @@
+% =========================================================================
+% BLSimulation project
+% =========================================================================
+% Description
+%    Configures physical properties, governing dimensionless numbers, and
+%    numerical execution options for forced convection boundary layer flow
+%    along a flat plate. Supports dual specification modes ('PHYSICAL' and
+%    'DIMENSIONLESS') with cross-consistency verification.
+%
+% Syntax
+%    Param = load_forced_convection_config(Param)
+%
+% Input arguments
+%    Param : Existing parameter structure containing execution flags
+%            (.run.mode, .run.problem_str).
+%
+% Output
+%    Param : Structure populated with physical properties (.phys),
+%            numerical solver settings (.num), grid specifications (.num.grid),
+%            and visualization preferences (.plot, .num.quiver).
+%
+% Example
+%    Param.run.mode = 'PHYSICAL';
+%    Param.run.problem_str = 'FORCED';
+%    Param = load_forced_convection_config(Param);
+%
+% Notes
+%    - In 'PHYSICAL' mode, dimensionless parameters (Re, Pr, Ec) are derived
+%      from thermodynamic properties evaluated at film temperature T_film.
+%    - In 'DIMENSIONLESS' mode, fluid transport parameters (nu, mu, cp) are
+%      back-calculated from governing dimensionless numbers.
+%    - Fully compatible with MATLAB and GNU Octave.
+%
+% See also
+%    forced_convection_ode, validate_selfsimilar_assumptions, load_numerical_tolerances
+%
+% Author      : Rvieytes
+% Assisted by : Gemini 3.6; OpenAI ChatGPT
+% Date        : 15/06/2026
+% Version     : 0.0.1
+% =========================================================================
+function Param = load_forced_convection_config(Param)
+
+    fprintf('   > Loading physical parameters (FORCED Convection)... ');
+
+    % --- 1. PHYSICAL LIMITS & REFERENCE BOUNDARY CONDITIONS ---
+    % Critical transition thresholds
+    Param.phys.Re_crit = 5e5;   % Critical Reynolds number for forced convection
+    Param.phys.Ra_crit = 1e9;   % Critical Rayleigh number reference
+
+    % Geometry and thermal boundary conditions
+    Param.phys.U_inf   = 0.5;   % Free-stream velocity [m/s]
+    Param.phys.L_plate = 0.8;   % Plate length [m]
+    Param.phys.T_w     = 300.5; % Wall temperature [K]
+    Param.phys.T_inf   = 300.0; % Free-stream temperature [K]
+    Param.phys.T_film  = 0.5 * (Param.phys.T_w + Param.phys.T_inf); % Film temperature [K]
+
+    % --- Base Fluid Reference Properties (Air at T_film ~ 300 K) ---
+    Param.phys.rho = 1.086;     % Density [kg/m^3]
+    Param.phys.k   = 0.02816;   % Thermal conductivity [W/m*K]
+
+    % --- 2. PHYSICAL CONSTANTS & DERIVED TEMPERATURE DIFFERENCE ---
+    C = phys.constants();
+    if isempty(C)
+        error('CONFIG:ConstantsError', 'Cannot initialize physical constants package (phys.constants).');
+    end
+
+    Param.phys.g      = C.G;                          % Gravitational acceleration [m/s^2]
+    Param.phys.deltaT = abs(Param.phys.T_w - Param.phys.T_inf); % Temperature delta [K]
+    Param.phys.beta   = 1.0 / Param.phys.T_inf;       % Volumetric thermal expansion coefficient [1/K]
+
+    % --- 3. INPUT MODE SELECTION & PROPERTY DERIVATION ---
+    if strcmpi(Param.run.mode, 'PHYSICAL')
+        % --- MODE: PHYSICAL (Specified Fluid Transport Properties) ---
+        Param.phys.mu = 1.963e-5; % Dynamic viscosity [Pa*s]
+        Param.phys.cp = 1008.0;   % Specific heat capacity [J/kg*K]
+
+        % Derive dimensionless numbers from physical transport parameters
+        Param.phys.nu = Param.phys.mu / Param.phys.rho;
+        Param.phys.Pr = (Param.phys.mu * Param.phys.cp) / Param.phys.k;
+        Param.phys.Ec = Param.phys.U_inf^2 / (Param.phys.cp * Param.phys.deltaT);
+        Param.phys.Re = (Param.phys.U_inf * Param.phys.L_plate) / Param.phys.nu;
+
+    elseif strcmpi(Param.run.mode, 'DIMENSIONLESS')
+        % --- MODE: DIMENSIONLESS (Specified Governing Numbers) ---
+        Param.phys.Re = 5e5;
+        Param.phys.Pr = 0.7;
+        Param.phys.Ec = 0.0; % Viscous dissipation toggled off (Ec = 0)
+
+        % Back-calculate fluid transport properties from dimensionless targets
+        Param.phys.nu = (Param.phys.U_inf * Param.phys.L_plate) / Param.phys.Re;
+        Param.phys.mu = Param.phys.nu * Param.phys.rho;
+
+        if Param.phys.Ec > 1e-9
+            Param.phys.cp = Param.phys.U_inf^2 / (Param.phys.Ec * Param.phys.deltaT);
+        else
+            % When Ec = 0, obtain cp directly from Prandtl specification
+            Param.phys.cp = (Param.phys.Pr * Param.phys.k) / Param.phys.mu;
+        end
+
+        % Verify Prandtl consistency
+        Pr_calc = (Param.phys.mu * Param.phys.cp) / Param.phys.k;
+        if abs(Pr_calc - Param.phys.Pr) / Param.phys.Pr > 1e-3
+            warning('CONFIG:PrMismatch', ...
+                'Input Pr (%.3f) diverges from derived Pr (%.3f). Maintaining input value.', ...
+                Param.phys.Pr, Pr_calc);
+        end
+    else
+        error('CONFIG:InvalidMode', 'Input mode "%s" is not recognized.', Param.run.mode);
+    end
+
+    % --- 4. CROSS-REGIME DIMENSIONLESS EVALUATION ---
+    Param.phys.Gr = (Param.phys.g * Param.phys.beta * Param.phys.deltaT * Param.phys.L_plate^3) / (Param.phys.nu^2);
+    Param.phys.Ra = Param.phys.Gr * Param.phys.Pr;
+    Param.phys.Ri = Param.phys.Gr / (Param.phys.Re^2);
+
+    fprintf('Done.\n');
+    fprintf('   > Loading numerical configuration (FORCED Convection)... ');
+
+    % --- 5. NUMERICAL ODE SOLVER & BOUNDARY CONDITION SETTINGS ---
+    Param.num.ode_handle            = @forced_convection_ode; % Standardized ODE handle
+    Param.num.eta_max               = 10.0;
+    Param.num.BC.known_initial_vals = [0; 0; 1];           % [f(0), f'(0), theta(0)]
+    Param.num.BC.initial_guess      = [0.3; -0.3] * sqrt(2);% Initial shooting seeds [f''(0), theta'(0)]
+    Param.num.BC.final_targets      = [1; 0];              % Targets at infinity [f'(eta_max), theta(eta_max)]
+
+    % --- 6. SPATIAL GRID DISCRETIZATION CONFIGURATION ---
+    Param.num.grid.x_start              = 0.00;              % Domain start coordinate [m]
+    Param.num.grid.x_end                = Param.phys.L_plate;% Domain end coordinate [m]
+    Param.num.grid.y_max                = 1.0;               % Maximum physical vertical height [m]
+    Param.num.grid.nx                   = 50;                % Number of horizontal spatial nodes
+    Param.num.grid.ny                   = 50;                % Number of vertical spatial nodes
+    Param.num.grid.y_max_safety_factor = 2.0;               % Boundary layer thickness safety buffer multiplier
+
+    % --- 7. VISUALIZATION & QUIVER VECTOR PREFERENCES ---
+    Param.plot.font_size   = 14;
+    Param.plot.line_width  = 2;
+
+    Param.num.quiver.step      = 4;   % Node stride sampling for vector quiver plots
+    Param.num.quiver.scale     = 0.1; % Vector length scaling factor
+    Param.num.quiver.head_size = 0.1; % Arrowhead scale factor
+
+    fprintf('Done.\n');
+
+end
