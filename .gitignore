@@ -1,15 +1,32 @@
-# Octave/Matlab
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Build / packaging
+build/
+dist/
+*.egg-info/
+
+# Octave / MATLAB
 *.asv
 *.m~
 .Octave_hist
 
-# Python
-__pycache__/
-*.py[cod]
+# IDEs
+.vscode/
+.idea/
 
-# Sistema
+# OS
 .DS_Store
 Thumbs.db
 
-# Local project files
-.sandbox
+
